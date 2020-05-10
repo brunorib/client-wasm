@@ -1,3 +1,6 @@
 tokens/
 target/
 Cargo.lock
+-s
+nohup.out
+stats*.csv

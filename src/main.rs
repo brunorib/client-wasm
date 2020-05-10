@@ -16,6 +16,7 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 use jsonwebtoken::dangerous_unsafe_decode;
 
 mod client;
@@ -28,7 +29,6 @@ use crate::commons::*;
 const COMMITMENTS: &str = "/commitments";
 const ANSWERS: &str = "/answers";
 const BALANCES: &str = "/balances";
-const USERS: &str = "/users";
 const LOGIN: &str = "/login";
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,8 +72,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut token = get_user_token(&client, &mut stats_file, api, username, password);
 
     let user_id = get_id_from_token(&token);
-
-    println!("{}", user_id);
 
     ingress_money(&client, &mut stats_file, api, &token, quantity);
 
@@ -121,9 +119,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn print_to_stats(file: &mut File, duration_request: Duration, request: &str, success: bool) {
-    let line = request.to_owned() + "," + &duration_request.as_millis().to_string() + "," + &success.to_string();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let line = request.to_owned() + "," + &duration_request.as_millis().to_string() + "," + &success.to_string() + "," + &timestamp.as_millis().to_string();
     if let Err(e) = writeln!(file, "{}", line) {
-        eprintln!("Couldn't write to file: {}", e);
+        println!("Couldn't write to file: {}", e);
     }
 }
 
@@ -169,9 +168,15 @@ fn get_commit_request(user_id: u32, commits: Vec<String>) -> Value {
 fn get_user_token(client: &Client, stats_file: &mut File, api: &str, user: &str, pass: &str) -> String {
     let req = get_token_request(user, pass);
 
-    let response = make_post_request(client, stats_file, api, LOGIN, &req).unwrap();
+    let response = make_post_request(client, stats_file, api, LOGIN, &req);
+    
+    if response.is_err() {
+        let err = response.unwrap_err();
+        println!("{}", err);
+        return "res.is_err".to_string()
+    }
 
-    let val : Value = response.json().unwrap();
+    let val : Value = response.unwrap().json().unwrap();
 
     let s = val["token"].to_string();
     s.replace("\"", "")
